@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { GenerationProgress } from "@/components/GenerationProgress";
 import type { Creative } from "@/types/creative";
 
 interface CreativeFormProps {
@@ -16,6 +17,7 @@ interface CreativeFormProps {
 export const CreativeForm = ({ onGenerate }: CreativeFormProps) => {
   const { toast } = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStatus, setGenerationStatus] = useState({ current: 0, total: 0, message: "" });
   
   const [formData, setFormData] = useState({
     service: "",
@@ -41,28 +43,94 @@ export const CreativeForm = ({ onGenerate }: CreativeFormProps) => {
 
     setIsGenerating(true);
 
-    // Simulate AI generation (replace with actual AI integration later)
-    setTimeout(() => {
-      const mockCreatives: Creative[] = Array.from({ length: 3 }, (_, i) => ({
-        id: `creative-${Date.now()}-${i}`,
-        imageUrl: `https://images.unsplash.com/photo-1464219789935-c2d9d9aba644?w=800&h=800&fit=crop&crop=center&q=80`,
-        headline: `${formData.message} - Criativo ${i + 1}`,
-        description: `Criativo premium para ${formData.service} em ${formData.scenario}. ${formData.additionalInstructions || "Soberano Turismo - Segurança certificada ANTT, ARTESP, CADASTUR."}`,
-        cta: formData.mediaType === "instagram" ? "Saiba Mais" : "Entre em Contato",
-      }));
-
-      onGenerate(mockCreatives);
-      setIsGenerating(false);
+    try {
+      const { generateImage, getCreativeText } = await import("@/services/imageGenerator");
       
+      const numImages = 3;
+      const creatives: Creative[] = [];
+      
+      setGenerationStatus({ current: 0, total: numImages, message: "Preparando geração..." });
+
+      for (let i = 0; i < numImages; i++) {
+        setGenerationStatus({ 
+          current: i, 
+          total: numImages, 
+          message: `Gerando criativo ${i + 1} de ${numImages}...` 
+        });
+
+        try {
+          const imageUrl = await generateImage(formData, i, (status) => {
+            console.log(`Image ${i + 1} status:`, status);
+            setGenerationStatus({ 
+              current: i, 
+              total: numImages, 
+              message: status 
+            });
+          });
+
+          const textContent = getCreativeText(formData, i);
+
+          creatives.push({
+            id: `creative-${Date.now()}-${i}`,
+            imageUrl,
+            headline: textContent.headline,
+            description: textContent.description,
+            cta: textContent.cta,
+          });
+          
+          setGenerationStatus({ 
+            current: i + 1, 
+            total: numImages, 
+            message: `Criativo ${i + 1} concluído!` 
+          });
+        } catch (error) {
+          console.error(`Error generating image ${i + 1}:`, error);
+          toast({
+            title: `Erro ao gerar criativo ${i + 1}`,
+            description: "Continuando com os próximos...",
+            variant: "destructive",
+          });
+        }
+      }
+
+      if (creatives.length > 0) {
+        onGenerate(creatives);
+        toast({
+          title: "Criativos gerados com sucesso!",
+          description: `${creatives.length} criativos premium prontos para uso.`,
+        });
+      } else {
+        toast({
+          title: "Erro na geração",
+          description: "Não foi possível gerar nenhum criativo. Tente novamente.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error in generation process:", error);
       toast({
-        title: "Criativos gerados com sucesso!",
-        description: `${mockCreatives.length} criativos prontos para uso.`,
+        title: "Erro na geração",
+        description: "Ocorreu um erro ao gerar os criativos. Tente novamente.",
+        variant: "destructive",
       });
-    }, 2000);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
-    <Card className="p-6 shadow-elegant">
+    <>
+      {isGenerating && (
+        <div className="mb-6">
+          <GenerationProgress 
+            current={generationStatus.current}
+            total={generationStatus.total}
+            status={generationStatus.message}
+          />
+        </div>
+      )}
+      
+      <Card className="p-6 shadow-elegant">{/* ... keep existing code */}
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid md:grid-cols-2 gap-6">
           {/* Serviço/Veículo */}
@@ -195,5 +263,6 @@ export const CreativeForm = ({ onGenerate }: CreativeFormProps) => {
         </Button>
       </form>
     </Card>
+    </>
   );
 };

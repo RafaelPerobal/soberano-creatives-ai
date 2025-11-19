@@ -12,18 +12,62 @@ export const CreativeGallery = ({ creatives }: CreativeGalleryProps) => {
   const { toast } = useToast();
 
   const handleDownload = (creative: Creative) => {
-    toast({
-      title: "Download iniciado",
-      description: `Baixando: ${creative.headline}`,
-    });
-    // Implement actual download logic here
+    try {
+      // Create a temporary link element
+      const link = document.createElement('a');
+      link.href = creative.imageUrl;
+      link.download = `soberano-${creative.id}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast({
+        title: "Download concluído!",
+        description: `${creative.headline} foi baixado com sucesso.`,
+      });
+    } catch (error) {
+      console.error("Download error:", error);
+      toast({
+        title: "Erro no download",
+        description: "Não foi possível baixar a imagem.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleShare = (creative: Creative) => {
-    toast({
-      title: "Compartilhar",
-      description: "Funcionalidade de compartilhamento em breve!",
-    });
+  const handleShare = async (creative: Creative) => {
+    try {
+      if (navigator.share) {
+        // Try to use native share API
+        const response = await fetch(creative.imageUrl);
+        const blob = await response.blob();
+        const file = new File([blob], `soberano-${creative.id}.png`, { type: 'image/png' });
+        
+        await navigator.share({
+          title: creative.headline,
+          text: creative.description,
+          files: [file],
+        });
+        
+        toast({
+          title: "Compartilhado!",
+          description: "Criativo compartilhado com sucesso.",
+        });
+      } else {
+        // Fallback: copy link
+        await navigator.clipboard.writeText(creative.imageUrl);
+        toast({
+          title: "Link copiado!",
+          description: "Link da imagem copiado para a área de transferência.",
+        });
+      }
+    } catch (error) {
+      console.error("Share error:", error);
+      toast({
+        title: "Compartilhamento cancelado",
+        description: "O compartilhamento foi cancelado ou não está disponível.",
+      });
+    }
   };
 
   const handleCopyText = (creative: Creative) => {
