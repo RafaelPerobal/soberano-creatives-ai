@@ -1,3 +1,5 @@
+import { GOOGLE_AI_KEY, LOVABLE_AI_GATEWAY } from "@/config/api";
+
 interface GenerationParams {
   service: string;
   scenario: string;
@@ -71,49 +73,41 @@ export const generateImage = async (
     onProgress?.(`Gerando imagem ${imageIndex + 1} com IA...`);
     console.log("Generating with prompt:", prompt);
 
-    // Use Hugging Face Inference API
-    const HF_API_KEY = "hf_demo"; // Demo key for testing
-    const response = await fetch(
-      "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${HF_API_KEY}`,
-        },
-        body: JSON.stringify({
-          inputs: prompt,
-          parameters: {
-            num_inference_steps: 4,
-            guidance_scale: 0,
-          },
-        }),
-      }
-    );
+    // Use Google Gemini Image Generation via Lovable AI Gateway
+    const response = await fetch(LOVABLE_AI_GATEWAY, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${GOOGLE_AI_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-image-preview",
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        modalities: ["image", "text"]
+      }),
+    });
 
     if (!response.ok) {
-      // If API fails, return a placeholder with text overlay
       console.warn("API generation failed, using placeholder");
       return generatePlaceholderImage(params, imageIndex);
     }
 
     onProgress?.("Processando imagem...");
     
-    const blob = await response.blob();
+    const data = await response.json();
+    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
     
-    // Convert blob to base64
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          resolve(reader.result);
-        } else {
-          reject(new Error("Failed to convert image to base64"));
-        }
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+    if (!imageUrl) {
+      console.warn("No image in response, using placeholder");
+      return generatePlaceholderImage(params, imageIndex);
+    }
+    
+    return imageUrl;
   } catch (error) {
     console.error("Error generating image:", error);
     // Fallback to placeholder
